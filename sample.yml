@@ -1,0 +1,8 @@
+---
+- hosts: myserver
+  remote_user: root
+  become: true
+  tasks:
+          - name: simple ansible playbook
+            file:
+                    path: /home/ec2-user/smaplefile
