@@ -1,0 +1,411 @@
+create materialized view txnvalidations as 
+with sourceidentifiererrors as (
+	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'SourceIdentifier is not SAP' as errormsg,'sourceidentifiererrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'1.1' as errorlevel from tmp_txn_dump
+	where ((tmp_txn_dump."SourceIdentifier")::text <> 'SAP'::text)
+),
+sourcefilenameerrors as (
+	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'SourceFileName is not empty' as errormsg,'sourcefilenameerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'1.2' as errorlevel from tmp_txn_dump
+	where ((tmp_txn_dump."SourceFileName")::text <> 'NaN'::text)
+),
+glaccountcodeerrors as (
+	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'GLAccountCode is not empty' as errormsg,'glaccountcodeerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'1.3' as errorlevel from tmp_txn_dump
+	where ((tmp_txn_dump."GLAccountCode")::text <> 'NaN'::text)
+),
+divisionerrors as (
+	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'Divisoin is not empty' as errormsg,'divisionerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'1.4' as errorlevel from tmp_txn_dump
+	where ((tmp_txn_dump."Division")::text <> 'NaN'::text)
+),
+subdivisionerrors as (
+   	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'SubDivision is not Maharashtra' as errormsg,'subdivisionerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'2.5' as errorlevel from tmp_txn_dump left outer join plant_master on tmp_txn_dump."SubDivision"=plant_master."subdivision"
+   	where plant_master."subdivision" is null
+),
+profitcentre1errors as (
+	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'ProfitCentre1 is not empty' as errormsg,'profitcentre1errors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'1.5' as errorlevel from tmp_txn_dump
+	where ((tmp_txn_dump."ProfitCentre1")::text <> 'NaN'::text)
+),
+profitcentre2errors as (
+	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'ProfitCentre2 is not empty' as errormsg,'profitcentre2errors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'1.5' as errorlevel from tmp_txn_dump
+	where ((tmp_txn_dump."ProfitCentre2")::text <> 'NaN'::text)
+),
+suppliergstinerrors as (
+ 	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'SupplierGSTIN is not present in plant_master table' as errormsg,'suppliergstinerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'2.6' as errorlevel from tmp_txn_dump left outer join plant_gstin_master
+ 	on plant_gstin_master."gstin"=tmp_txn_dump."SupplierGSTIN"
+ 	where plant_gstin_master.GSTIN is null
+),
+documenttypeerrors as (
+ 	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'DocumentType is not INV or CR' as errormsg,'documenttypeerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'3.1' as errorlevel from tmp_txn_dump 
+ 	where tmp_txn_dump."DocumentType" not in ('INV','CR')
+),
+supplytypeerrors as (
+ 	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,(case when tmp_txn_dump."SupplyType" not in ('NIL','CAN','TAX') then 'SupplyType is not NIL, CAN or TAX' else 'Supply Type is not as per product_master table' end)  as errormsg,'supplytypeerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,(case when tmp_txn_dump."SupplyType" not in ('CAN','NIL','TAX') then '3.3' else '2.4' end) as errorlevel from public.tmp_txn_dump left outer join public.product_master on tmp_txn_dump."SupplyType"::text=product_master."supply_type"::text
+ 	where product_master."supply_type" is null
+),
+documentdateerrors as (
+ 	select t1."id"-3 as CSVrownumber,t1."DocumentNumber" as InvoiceNumber,t1."SoldToPartyName" as BoothNameandNumber,'DocumentDate is not in return period' as errormsg,'documentdateerrors' as errorname,t1."ReturnPeriod" as period,t1."CustomerGSTIN" as Customergstin,'3.1' as errorlevel from tmp_txn_dump t1 inner join tmp_txn_dump t2
+ 	on t1."id"=t2."id"
+	where substring(substring(cast(t1."DocumentDate" as text),4,4),3,3)<>substring(cast(t2."ReturnPeriod" as text),1,2)
+),
+crdrpregsterrors as (
+ 	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'CRDRPreGST is not N' as errormsg,'crdrpregsterrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'3.4' as errorlevel from tmp_txn_dump
+ 	where ((tmp_txn_dump."CRDRPreGST")::text <> 'N'::text)
+),
+customergstinerrors as (
+ 	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'CustomerGSTIN is not present in booth master table' as errormsg,'customergstinerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'3.14' as errorlevel from tmp_txn_dump left outer join booth_gstin_master
+ 	on booth_gstin_master."gstin"=tmp_txn_dump."CustomerGSTIN"
+ 	where booth_gstin_master."gstin" is null
+),
+uinorcompositionerrors as (
+ 	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'UINorComposition is not empty' as errormsg,'uinorcompositionerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'1.7' as errorlevel from tmp_txn_dump 
+ 	where ((tmp_txn_dump."UINorComposition")::text <> 'NaN'::text)
+),
+customernameerrors as (
+ 	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'CustomerName is not present in booth master table' as errormsg,'customernameerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'1.27' as errorlevel from tmp_txn_dump left outer join booth_gstin_master
+ 	on booth_gstin_master."name"=tmp_txn_dump."CustomerName"
+ 	where booth_gstin_master."name" is null
+),
+customercodeerrors as (
+ 	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'CustomerCode is not present in booth master table' as errormsg,'customercodeerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'1.21' as errorlevel from tmp_txn_dump left outer join booth_master
+ 	on booth_master."booth_code"=tmp_txn_dump."CustomerCode"
+ 	where booth_master."booth_code" is null
+),
+shiptostateerrors as (
+ 	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'ShipToState is not matching with CustomerGSTIN' as errormsg,'shiptostateerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'1.23' as errorlevel from tmp_txn_dump
+ 	where tmp_txn_dump."ShipToState"<>substring(tmp_txn_dump."CustomerGSTIN",1,2)
+),
+billtostateerrors as (
+ 	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'BillToState is not matching with CustomerGSTIN' as errormsg,'billtostateerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'1.22' as errorlevel from tmp_txn_dump
+	where tmp_txn_dump."BillToState"<>substring(tmp_txn_dump."CustomerGSTIN",1,2)
+),
+poserrors as (
+ 	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'POS is not matching with CustomerGSTIN' as errormsg,'poserrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'1.24' as errorlevel from tmp_txn_dump
+	where tmp_txn_dump."POS"<>substring(tmp_txn_dump."CustomerGSTIN",1,2)
+),
+plantstateerrors as (
+	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'Plant State is not matching with plant_master table' as errormsg,'plantstateerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'2.7' as errorlevel from tmp_txn_dump left outer join plant_master on tmp_txn_dump."PlantState"::text = plant_master."state"::text
+	where plant_master."state" is null
+),
+plantcodeerrors as (
+	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'Plant Code is not matching with plant_master table' as errormsg,'plantcodeerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'2.2' as errorlevel from tmp_txn_dump left outer join plant_master on tmp_txn_dump."PlantCode"=plant_master."plant_code"
+	where plant_master."plant_code" is null
+),
+portcodeerrors as (
+ 	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'PortCode is not empty' as errormsg,'portcodeerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'1.8' as errorlevel from tmp_txn_dump
+ 	where ((tmp_txn_dump."PortCode")::text <> 'NaN'::text)
+),
+shippingbillnumbererrors as (
+ 	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'ShippingBillNumber is not empty' as errormsg,'shippingbillnumbererrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'1.9' as errorlevel from tmp_txn_dump
+ 	where ((tmp_txn_dump."ShippingBillNumber")::text <> 'NaN'::text)
+),
+shippingbilldateerrors as (
+ 	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'ShippingBillDate is not empty' as errormsg,'shippingbilldateerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'1.10' as errorlevel from tmp_txn_dump
+ 	where ((tmp_txn_dump."ShippingBillDate")::text <> 'NaN'::text)
+),
+foberrors as (
+ 	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'FOB is not empty' as errormsg,'foberrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'1.11' as errorlevel from tmp_txn_dump
+ 	where ((tmp_txn_dump."FOB")::text <> 'NaN'::text)
+),
+exportdutyerrors as (
+ 	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'ExportDuty is not empty' as errormsg,'exportdutyerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'1.12' as errorlevel from tmp_txn_dump
+ 	where ((tmp_txn_dump."ExportDuty")::text <> 'NaN'::text)
+),
+hsnorsacerrors as (
+ 	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'HSNorSAC is not matching with product master/is not of 8 digit number' as errormsg,'hsnorsacerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'2.10' as errorlevel from tmp_txn_dump left outer join
+ 	product_master on tmp_txn_dump."HSNorSAC"::numeric=product_master."hsn_code"::numeric
+ 	where product_master."hsn_code" is null
+),
+productcodeerrors as (
+ 	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'ProductCode is not matching product master table' as errormsg,'productcodeerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'2.11' as errorlevel from tmp_txn_dump left outer join product_master
+ 	on tmp_txn_dump."ProductCode"::text=product_master."product_code"::text
+ 	where product_master."product_code" is null
+),
+productdescriptionerrors as (
+ 	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'ProductDescription is not matching product master table' as errormsg,'productdescriptionerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'1.28' as errorlevel from tmp_txn_dump left outer join product_master
+ 	on tmp_txn_dump."ProductDescription"=product_master."description"
+ 	where product_master."description" is null
+),
+unitofmeasurementerrors as (
+ 	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'UnitOfMeasurement is not matching product master table' as errormsg,'unitofmeasurementerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'2.8' as errorlevel from tmp_txn_dump left outer join product_master
+ 	on tmp_txn_dump."UnitOfMeasurement"=product_master."uqc"
+ 	where product_master."uqc" is null
+),
+quantityerrors as (
+ 	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'Quanity is not a multiple of quantity in prodcut master table' as errormsg,'quantityerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'2.9' as errorlevel from tmp_txn_dump inner join product_master on tmp_txn_dump."ProductCode"::text=product_master."product_code"::text and tmp_txn_dump.id = product_master.id
+	where tmp_txn_dump."Quantity"::numeric % (case when product_master."lot_size"::numeric=0 then 1 else product_master."lot_size"::numeric end) != 0
+),
+taxablevalueerrors as (
+ 	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'TaxableValue is not as per product master' as errormsg,'taxablevalueerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'1.29' as errorlevel from tmp_txn_dump inner join product_rates
+ 	on tmp_txn_dump."id" = product_rates."id"
+ 	where tmp_txn_dump."TaxableValue"::numeric not between product_rates."purchase_price_min"::numeric and product_rates."purchase_price_max"::numeric
+),
+stateuttaxrateerrors as (
+ 	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'StateUTTaxRate is not equal to CentralTaxRate' as errormsg,'stateuttaxrateerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'3.11' as errorlevel from tmp_txn_dump 
+ 	where ((tmp_txn_dump."StateUTTaxRate")::text <> (tmp_txn_dump."CentralTaxRate")::text )
+),
+stateuttaxamounterrors as (
+ 	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'StateUTTaxAmount is not equal to CentralTaxAmount' as errormsg,'stateuttaxamounterrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'3.12' as errorlevel from tmp_txn_dump 
+ 	where ((tmp_txn_dump."StateUTTaxAmount")::text <> (tmp_txn_dump."CentralTaxAmount")::text )
+),
+cessrateadvaloremerrors as (
+ 	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'CessRateAdvalorem is not empty' as errormsg,'cessrateadvaloremerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'3.15' as errorlevel from tmp_txn_dump 
+ 	where (tmp_txn_dump."CessRateAdvalorem")::text <> 'NaN'::text
+),
+cessamountadvaloremerrors as (
+ 	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'CessAmountAdvalorem is not empty' as errormsg,'cessamountadvaloremerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'3.16' as errorlevel from tmp_txn_dump 
+ 	where (tmp_txn_dump."CessAmountAdvalorem")::text <> 'NaN'::text
+),
+cessratespecificerrors as (
+	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'CessRateSpecific is not empty' as errormsg,'cessratespecificerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'3.17' as errorlevel from tmp_txn_dump 
+	where (tmp_txn_dump."CessRateSpecific")::text <> 'NaN'::text
+),
+cessamountspecificerrors as (
+	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'CessAmountSpecific is not empty' as errormsg,'cessamountspecificerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'3.18' as errorlevel from tmp_txn_dump 
+	where (tmp_txn_dump."CessAmountSpecific")::text <> 'NaN'::text
+),
+reversechargeflagerrors as (
+ 	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'ReverseChargeFlag is not empty' as errormsg,'reversechargeflagerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'3.5' as errorlevel from tmp_txn_dump 
+ 	where (tmp_txn_dump."ReverseChargeFlag")::text <> 'NaN'::text
+),
+tcsflagerrors as (
+ 	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'TCSFlag is not empty' as errormsg,'tcsflagerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'1.13' as errorlevel from tmp_txn_dump 
+ 	where (tmp_txn_dump."TCSFlag")::text <> 'NaN'::text
+),
+ecomgstinerrors as (
+ 	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'eComGSTIN is not empty' as errormsg,'ecomgstinerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'1.14' as errorlevel from tmp_txn_dump 
+ 	where (tmp_txn_dump."eComGSTIN")::text <> 'NaN'::text
+),
+itcflagerrors as (
+	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'ITCFlag is not empty' as errormsg,'itcflagerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'1.15' as errorlevel from tmp_txn_dump 
+ 	where (tmp_txn_dump."ITCFlag")::text <> 'NaN'::text
+),
+accountingvouchernumbererrors as (
+ 	select ss.CSVrownumber,ss.InvoiceNumber,ss.BoothNameandNumber,'DocumentNumber is not proper' as errormsg,'documentnumbererrors' as errorname,ss.period,ss.Customergstin,'1.20' as errorlevel from (select case when tmp_txn_dump."AccountingVoucherNumber"::numeric-lag(tmp_txn_dump."AccountingVoucherNumber"::numeric) over (order by tmp_txn_dump."id") > 0 then 1 else 0 end as diff,tmp_txn_dump."DocumentNumber",tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,tmp_txn_dump."AccountingVoucherNumber" from public.tmp_txn_dump) as ss
+	where ss.diff::numeric<0 or ss."AccountingVoucherNumber"::text !~ '[0-9]{8}'
+),
+userdefinedfield1errors as (
+	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'eComGSTIN is not empty' as errormsg,'ecomgstinerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'1.16' as errorlevel from tmp_txn_dump
+	where (tmp_txn_dump."Userdefinedfield1" is null)
+),
+userdefinedfield2errors as (
+	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'eComGSTIN is not empty' as errormsg,'ecomgstinerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'1.17' as errorlevel from tmp_txn_dump
+	where (tmp_txn_dump."Userdefinedfield2" is null)
+),
+userdefinedfield3errors as (
+	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'eComGSTIN is not empty' as errormsg,'ecomgstinerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'1.18' as errorlevel from tmp_txn_dump
+	where (tmp_txn_dump."Userdefinedfield3" is null)
+),
+
+accountingvoucherdateerrors as (
+ 	select t1."id"-3 as CSVrownumber,t1."DocumentNumber" as InvoiceNumber,t1."SoldToPartyName" as BoothNameandNumber,'AccountingVoucherDate is not related to return period' as errormsg,'accountingvoucherdateerrors' as errorname,t1."ReturnPeriod" as period,t1."CustomerGSTIN" as Customergstin,'3.6' as errorlevel from tmp_txn_dump t1 inner join tmp_txn_dump t2
+ 	on t1."id"=t2."id" 
+ 	where substring(substring(cast(t1."AccountingVoucherDate" as text),4,4),3,3)<>substring(cast(t2."ReturnPeriod" as text),1,2)
+),
+salelocalcentralerrors as (
+	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'SaleLocalCentral is not as per required' as errormsg,'salelocalcentralerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'3.20' as errorlevel from tmp_txn_dump 
+ 	where case when tmp_txn_dump."POS"=substring(tmp_txn_dump."SupplierGSTIN",1,2) then tmp_txn_dump."SaleLocalCentral"<>'Local'
+ 	when tmp_txn_dump."POS"<>substring(tmp_txn_dump."SupplierGSTIN",1,2) then tmp_txn_dump."SaleLocalCentral"<>'Central'
+ 	else tmp_txn_dump."SaleLocalCentral"<>'Central' end
+),
+mrperrors as (
+ 	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'MRP is not more than TaxableValue/ is not present in product master table' as errormsg,'mrperrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'1.30' as errorlevel from tmp_txn_dump left outer join product_rates 
+ 	on tmp_txn_dump."id"=product_rates."id"
+ 	where tmp_txn_dump."MRP"::numeric not between product_rates."mrp_min"::numeric and product_rates."mrp_max"::numeric
+),
+soldtopartyerrors as (
+ 	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'SoldToParty is not as per booth master table' as errormsg,'soldtopartyerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'1.25' as errorlevel from tmp_txn_dump  left outer join booth_master
+ 	on tmp_txn_dump."SoldToParty"=booth_master."soldtoparty" 
+ 	where booth_master."soldtoparty" is null
+),
+soldtopartynameerrors as (
+ 	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'SoldToPartyName is not as per booth master table' as errormsg,'soldtopartynameerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'1.26' as errorlevel from tmp_txn_dump  left outer join booth_master
+ 	on tmp_txn_dump."SoldToPartyName"=booth_master."soldtopartyname" 
+ 	where booth_master."soldtopartyname" is null
+),
+centraltaxrateerrors as (
+	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'Central Tax Rate is not as per GST' as errormsg,'centraltaxrateerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'3.10' as errorlevel from tmp_txn_dump
+	where (case when "CentralTaxRate"='NaN' then 0 else "CentralTaxRate"::numeric end) <> (case when "SaleLocalCentral"='Local' then "GST"::numeric/2 else null end)
+),
+integratedtaxrateerrors as (
+	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'SoldToParty is not as per GSTIN in product master table' as errormsg,'soldtopartyerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'3.8' as errorlevel from tmp_txn_dump 
+	where ("IntegratedTaxRate" <> (case when "SaleLocalCentral"::text='Local'::text then 'NaN'::text else "GST"::text end))
+),
+totalgstvalueerrors as (
+ 	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'TotalGSTValue is not equal to sum of CentralTaxAmount, StateUTTaxAmount and IntegratedTaxAmount' as errormsg,'totalgstvalueerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'3.22' as errorlevel from tmp_txn_dump
+ 	where "TotalGSTValue"::numeric<>(case when "CentralTaxAmount"::text='NaN'::text then 0 else "CentralTaxAmount"::numeric end)+(case when "StateUTTaxAmount"::text='NaN'::text then 0 else "StateUTTaxAmount"::numeric end)+(case when "IntegratedTaxAmount"::text='NaN'::text then 0 else "IntegratedTaxAmount"::numeric end)
+),
+gsterrors as (
+	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,(case when product_rates."gst_rate" is null then 'GST is not as per product_master table' else 'GST is not equal to sum of CentralTaxRate, StateUTTaxRate and IntegratedTaxRate' end)  as errormsg,'gsterrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,(case when (case when tmp_txn_dump."CentralTaxRate"='NaN' then 0 else tmp_txn_dump."CentralTaxRate"::numeric end)+(case when tmp_txn_dump."StateUTTaxRate"='NaN' then 0 else tmp_txn_dump."StateUTTaxRate"::numeric end)+(case when tmp_txn_dump."IntegratedTaxRate"='NaN' then 0 else tmp_txn_dump."IntegratedTaxRate"::numeric end)<>tmp_txn_dump."GST"::numeric then '3.21' when product_rates."gst_rate" is null then '2.12' else '9.9' end) as errorlevel from public.tmp_txn_dump left outer join public.product_rates on tmp_txn_dump."GST"::numeric=product_rates."gst_rate"::numeric
+	where product_rates."gst_rate" is null
+),
+documentnumbererrors as (
+	select ss.CSVrownumber,ss.InvoiceNumber,ss.BoothNameandNumber,'DocumentNumber is not proper' as errormsg,'documentnumbererrors' as errorname,ss.period,ss.Customergstin,'1.19' as errorlevel from (select (case when (tmp_txn_dump."DocumentNumber"::numeric-lag(tmp_txn_dump."DocumentNumber"::numeric) over (order by tmp_txn_dump."id")) < 0 then 1 else 0 end) as diff,tmp_txn_dump."DocumentNumber",tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,tmp_txn_dump."DocumentNumber" as dn from public.tmp_txn_dump) as ss
+ 	where ss.diff::numeric=1 or ss.dn::text !~ '[0-9]{8}'
+ ),
+ linenumbererrors as (
+ 	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'LineNumber is not null' as errormsg,'linenumbererrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'1.6' as errorlevel from tmp_txn_dump
+ 	where "LineNumber" is null
+ ),
+ billingtypeerrors as (
+ 	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'BiilingType is not as per list' as errormsg,'billingtypeerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'3.7' as errorlevel from tmp_txn_dump left outer join billing_type_rules on tmp_txn_dump."BillingType" = billing_type_rules."type"
+	where billing_type_rules."type" is null
+ ),
+centraltaxamounterrors as (
+ 	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'CentralTaxAmount is not per CentralTaxRate and TaxableValue' as errormsg,'centraltaxamounterrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'3.13' as errorlevel from tmp_txn_dump
+ 	where abs((case when "CentralTaxAmount"::text='NaN'::text then 0 else "CentralTaxAmount"::numeric end)-round("TaxableValue"::numeric*(case when "CentralTaxRate"::text = 'NaN'::text then 0 else "CentralTaxRate"::numeric end)/100,2))>0.02
+),
+integratedtaxamounterrors as (
+ 	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'IntegratedTaxAmount is not per IntegratedTaxRate and TaxableValue' as errormsg,'integratedtaxamounterrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'3.9' as errorlevel from tmp_txn_dump
+ 	where abs((case when "IntegratedTaxAmount"::text='NaN'::text then 0 else "IntegratedTaxAmount"::numeric end)-round("TaxableValue"::numeric*(case when "IntegratedTaxRate"::text = 'NaN'::text then 0 else "IntegratedTaxRate"::numeric end)/100,2))>0.02
+),
+invoicevalueerrors as (
+ 	select distinct t2."id"-3 as CSVrownumber,t2."DocumentNumber" as InvoiceNumber,t."SoldToPartyName" as BoothNameandNumber,'InvoiceValue is not per TotalGSTValue and TaxableValue' as errormsg,'invoicevalueerrors' as errorname,t."ReturnPeriod" as period,t."CustomerGSTIN" as Customergstin,'3.19' as errorlevel from (select tmp_txn_dump."DocumentNumber",tmp_txn_dump."SoldToPartyName",sum(tmp_txn_dump."TotalGSTValue"::numeric+tmp_txn_dump."TaxableValue"::numeric) as tsum,tmp_txn_dump."InvoiceValue",tmp_txn_dump."ReturnPeriod",tmp_txn_dump."CustomerGSTIN" from public.tmp_txn_dump group by "DocumentNumber","SoldToPartyName","InvoiceValue","ReturnPeriod","CustomerGSTIN") as t inner join public.tmp_txn_dump t2 on t."DocumentNumber"=t2."DocumentNumber"
+	where tsum<>t."InvoiceValue"::numeric order by t2."DocumentNumber"
+),
+originaldocumentnumbererrors as (
+ 	select t1."id"-3 as CSVRowNumber,t1."DocumentNumber" as InvoiceNumber,t1."SoldToPartyName" as BoothNameandNumber,'OriginalDocumentNumber is not containing invoice reference' as errormsg,'originaldocumentnumbererrors' as errorname,t1."ReturnPeriod" as period,t1."CustomerGSTIN" as Customergstin,'3.23' as errorlevel from public.tmp_txn_dump t1 left outer join public.tmp_txn_dump t2 on t1."OriginalDocumentNumber" = t2."DocumentNumber" 
+ 	where t1."DocumentType"='CR' and t1."OriginalDocumentNumber"='NaN' group by t1."DocumentNumber",t1."id",t1."SoldToPartyName",t1."ReturnPeriod",t1."CustomerGSTIN"
+),
+originaldocumentdateerrors as (
+ 	select t1."id"-3 as CSVRowNumber,t1."DocumentNumber" as InvoiceNumber,t1."SoldToPartyName" as BoothNameandNumber,'OriginalDocumentDate is not containing invoice reference' as errormsg,'originaldocumentdateerrors' as errorname,t1."ReturnPeriod" as period,t1."CustomerGSTIN" as Customergstin,'3.24' as errorlevel from public.tmp_txn_dump t1 left outer join public.tmp_txn_dump t2 on t1."OriginalDocumentDate" = t2."DocumentDate" 
+ 	where t1."DocumentType"='CR' and t1."OriginalDocumentDate"='NaN' group by t1."DocumentNumber",t1."id",t1."SoldToPartyName",t1."ReturnPeriod",t1."CustomerGSTIN"
+),
+itemcategoryerrors as (
+	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'Item Category is not as per list' as errormsg,'itemcategoryerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'2.3' as errorlevel from tmp_txn_dump
+	where "ItemCategory" not in (select value from public.config where "type"='item_category')
+),
+ordertypeerrors as (
+	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'Order Type is not as per list' as errormsg,'ordertypeerrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'2.1' as errorlevel from tmp_txn_dump
+	where "OrderType" not in (select value from public.config where "type"='order_type')
+),
+returnperioderrors as (
+	select tmp_txn_dump."id"-3 as CSVrownumber,tmp_txn_dump."DocumentNumber" as InvoiceNumber,tmp_txn_dump."SoldToPartyName" as BoothNameandNumber,'Return Period is not as per period offered' as errormsg,'returnperioderrors' as errorname,tmp_txn_dump."ReturnPeriod" as period,tmp_txn_dump."CustomerGSTIN" as Customergstin,'3.2' as errorlevel from tmp_txn_dump
+	where tmp_txn_dump."ReturnPeriod" <> tmp_txn_dump."Period"
+)
+select * from sourceidentifiererrors
+union
+select * from sourcefilenameerrors
+union
+select * from glaccountcodeerrors
+union
+select * from divisionerrors
+union 
+select * from subdivisionerrors
+union
+select * from profitcentre1errors
+union
+select * from profitcentre2errors
+union 
+select * from suppliergstinerrors
+union 
+select * from documenttypeerrors
+union 
+select * from supplytypeerrors
+union 
+select * from documentdateerrors
+union 
+select * from crdrpregsterrors
+union 
+select * from customergstinerrors
+union
+select * from uinorcompositionerrors
+union
+select * from customernameerrors
+union
+select * from customercodeerrors
+union
+select * from shiptostateerrors
+union
+select * from billtostateerrors
+union 
+select * from poserrors
+union
+select * from portcodeerrors
+union
+select * from shippingbillnumbererrors
+union
+select * from shippingbilldateerrors
+union 
+select * from foberrors
+union
+select * from exportdutyerrors
+union
+select * from hsnorsacerrors
+union
+select * from productcodeerrors
+union
+select * from productdescriptionerrors
+union 
+select * from unitofmeasurementerrors
+union
+select * from quantityerrors
+union
+select * from taxablevalueerrors
+union
+select * from stateuttaxrateerrors
+union
+select * from centraltaxrateerrors
+union
+select * from stateuttaxamounterrors
+union
+select * from cessrateadvaloremerrors
+union
+select * from cessamountadvaloremerrors
+union
+select * from cessratespecificerrors
+union
+select * from cessamountspecificerrors
+union
+select * from reversechargeflagerrors
+union
+select * from tcsflagerrors
+union
+select * from ecomgstinerrors
+union
+select * from itcflagerrors
+union 
+select * from accountingvouchernumbererrors
+union
+select * from accountingvoucherdateerrors
+union
+select * from salelocalcentralerrors
+union
+select * from mrperrors
+union
+select * from soldtopartyerrors 
+union
+select * from soldtopartynameerrors	 	 	
+union
+select * from totalgstvalueerrors
+union
+select * from gsterrors
+union
+select * from documentnumbererrors
+union
+select * from centraltaxamounterrors
+union
+select * from integratedtaxamounterrors
+union
+select * from invoicevalueerrors
+union
+select * from originaldocumentnumbererrors
+union
+select * from originaldocumentdateerrors
+union
+select * from linenumbererrors
+union
+select * from userdefinedfield1errors
+union
+select * from userdefinedfield2errors
+union
+select * from userdefinedfield3errors
+union
+select * from billingtypeerrors
+union
+select * from plantcodeerrors
+union
+select * from plantstateerrors
+union
+select * from itemcategoryerrors
+union
+select * from ordertypeerrors
+union 
+select * from returnperioderrors
