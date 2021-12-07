@@ -17,4 +17,4 @@ spec:
       - name: nginx-app1
         image: jeetp2001/nginx-app-img1
         ports:
-        - containerPort: 80
+          - containerPort: 80
