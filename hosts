@@ -1,2 +1,0 @@
-[myserver]
-13.233.40.0 ansible_ssh_user=root ansible_ssh_password=2908
