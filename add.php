@@ -4,10 +4,10 @@
 	$lname = $_POST['last_name'];
 	$cjob = $_POST['current_job'];
 	$location = $_POST['location'];
-	$servername = "db-project.cjkzu1bulk3s.ap-south-1.rds.amazonaws.com";
-	$username = "admin";
+	$servername = "192.168.236.173";
+	$username = "root";
 	$password = "G0d!sgreat";
-	$database = "student";
+	$database = "php_project";
 	$conn = new mysqli($servername, $username, $password, $database);
 	$q = "insert into student_info values ('$sid','$fname','$lname','$cjob','$location')";
 	mysqli_query($conn,$q);
